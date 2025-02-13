@@ -1,0 +1,9 @@
+*key*
+input*
+output*
+*pycache*
+.idea
+.vscode
+*history
+config*
+test*
