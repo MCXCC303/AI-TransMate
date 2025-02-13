@@ -11,15 +11,6 @@ from create_config import collect_lang, collect_model, collect_provider_and_api_
 import tempfile
 import shutil
 import subprocess
-from enum import Enum
-
-
-class Colors(Enum):
-    RED = '\033[31m'  # 红色
-    GREEN = '\033[32m'  # 绿色
-    YELLOW = '\033[33m'  # 黄色
-    BLUE = '\033[34m'  # 蓝色
-    CYAN = '\033[36m'  # 青蓝
 
 
 def display_config(file_path):
@@ -203,6 +194,4 @@ if __name__ == "__main__":
         init()
     else:
         print("Loading config...\n")
-    with open(config_file) as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
     cli()

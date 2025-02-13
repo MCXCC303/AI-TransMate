@@ -131,21 +131,6 @@ def collect_provider_and_api_key() -> tuple:
             continue
     return provider, api_key, urls[provider]
 
-    # provider_file_name = provider_dir / (provider + '.json')
-    # with open(provider_file_name) as jsonfile:
-    #     valid_models = {key: value for key, value in json.load(jsonfile).items() if value is not None}
-    # sys.stdout.write(f'Available Models in {provider}: \n' +
-    #                  '\n'.join(valid_models.keys()) + '\n\033[1;32m>>>\033[0m ')
-    # sys.stdout.flush()
-    # while True:
-    #     try:
-    #         model = valid_models[input().strip()]
-    #         break
-    #     except KeyError:
-    #         print("Not Exist")
-    #         continue
-    # return provider, model
-
 
 def collect_model(provider, api_key) -> str:
     with open("./providers/provider_list.yml", "r") as file:
