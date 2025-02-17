@@ -5,10 +5,11 @@ import openai
 import yaml
 from pathlib import Path
 import getpass
+import ollama
 
 
 def collect_lang() -> tuple:
-    with open("./prompt/en_US.json") as jsonfile:
+    with open("lang/en_US.json") as jsonfile:
         mapping = json.load(jsonfile)
     sys.stdout.write("Available languages:\n\n")
     count = 0
@@ -88,7 +89,7 @@ def collect_provider_and_api_key() -> tuple:
     with open("./providers/provider_list.yml", "r") as file:
         urls = yaml.load(file, Loader=yaml.FullLoader)
     providers = list(urls.keys())
-    sys.stdout.write("Choose an API Provider: \n\n")
+    sys.stdout.write("Choose an API Model: \n\n")
     count = 0
     for prov in providers:
         sys.stdout.write(f"\t{count}): {prov}\n")
@@ -100,21 +101,20 @@ def collect_provider_and_api_key() -> tuple:
             provider = providers[int(input_provider)]
             break
         except IndexError:
-            sys.stdout.write("\nERROR: Provider not exist."
-                             "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
             continue
         except KeyError:
-            sys.stdout.write("\nERROR: Provider not exist."
-                             "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
             continue
         except ValueError:
             pass
         if input_provider.upper() not in providers:
-            sys.stdout.write("\nERROR: Provider not exist."
-                             "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
             continue
         provider = input_provider.upper()
         break
+    if provider == "LOCAL":
+        return provider, None, None
 
     while True:
         try:
@@ -132,46 +132,56 @@ def collect_provider_and_api_key() -> tuple:
     return provider, api_key, urls[provider]
 
 
-def collect_model(provider, api_key) -> str:
+def collect_model_remote(provider, api_key) -> str:
     with open("./providers/provider_list.yml", "r") as file:
         urls = yaml.load(file, Loader=yaml.FullLoader)
     with open("./providers/model_info.yaml", "r") as file:
         docs = yaml.load(file, Loader=yaml.FullLoader)
     client = openai.OpenAI(api_key=api_key, base_url=urls[provider])
     models = []
+    filter_models = [
+        "code",
+        # 'math',
+        "ocr",
+        "vl",
+        "diff",
+        "audio",
+        "sovits",
+        "video",
+        "janus",
+        "flux",
+        "qvq",
+        "mochi",
+        "-en",
+    ]
+
     for model in client.models.list():
-        filter_models = ['code',
-                         'math',
-                         'ocr',
-                         'vl',
-                         'diff',
-                         'audio',
-                         'sovits',
-                         'video',
-                         'janus',
-                         'flux',
-                         'qvq',
-                         'mochi',
-                         '-en']
         model_id = model.id.lower()
         if any(key in model_id for key in filter_models):
             continue
         models.append(model.id)
-    if provider == 'ALIYUN':
-        models += ['deepseek-r1', 'deepseek-v3', "deepseek-r1-distill-qwen-1.5b", "deepseek-r1-distill-qwen-14b",
-                   "deepseek-r1-distill-qwen-32b", "deepseek-r1-distill-llama-70b", "deepseek-r1-distill-llama-8b",
-                   "deepseek-r1-distill-qwen-7b"]
+    if provider == "ALIYUN":
+        models += [
+            "deepseek-r1",
+            "deepseek-v3",
+            "deepseek-r1-distill-qwen-1.5b",
+            "deepseek-r1-distill-qwen-14b",
+            "deepseek-r1-distill-qwen-32b",
+            "deepseek-r1-distill-llama-70b",
+            "deepseek-r1-distill-llama-8b",
+            "deepseek-r1-distill-qwen-7b",
+        ]
     models.sort()
-    print(f'Available models in {provider}: \n')
+    print(f"Available models in {provider}: \n")
     ommition = 10
     if len(models) >= ommition:
         for i in range(ommition):
-            print(f'\t{models[i]}')
-        print('\t...\n')
-        print(f'Check more models in {docs[provider]}')
+            print(f"\t{models[i]}")
+        print("\t...\n")
+        print(f"Check more models in {docs[provider]}")
     else:
         for model in models:
-            print(f'\t{model}')
+            print(f"\t{model}")
     sys.stdout.write("\n\033[1;32m>>>\033[0m ")
     sys.stdout.flush()
     while True:
@@ -179,8 +189,7 @@ def collect_model(provider, api_key) -> str:
             input_model = input().strip()
             if input_model in models:
                 break
-            sys.stdout.write('ERROR: Model not found.'
-                             '\n\033[1;32m>>>\033[0m ')
+            sys.stdout.write("ERROR: Model not found." "\n\033[1;32m>>>\033[0m ")
             sys.stdout.flush()
         except KeyboardInterrupt:
             sys.stdout.write("\nERROR: No model selected.\n")
@@ -189,47 +198,98 @@ def collect_model(provider, api_key) -> str:
     return input_model
 
 
+def collect_model_local():
+    try:
+        models = [mod.model for mod in list(ollama.list())[0][1]]
+        print(f"Available local models: \n")
+    except ConnectionError:
+        print('Failed to find ollama service. Is it opened?')
+        return
+
+    count = 0
+    for model in models:
+        sys.stdout.write(f"\t{count}): {model}\n")
+        count += 1
+    sys.stdout.write("\n\033[1;32m>>>\033[0m ")
+    while True:
+        input_model = input().strip()
+        try:
+            model = models[int(input_model)]
+            break
+        except IndexError:
+            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            continue
+        except KeyError:
+            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            continue
+        except ValueError:
+            pass
+        except KeyboardInterrupt:
+            sys.stdout.write("\nERROR: No model selected.\n")
+            sys.stdout.flush()
+            raise KeyboardInterrupt
+        if input_model.upper() not in models:
+            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            continue
+        model = input_model.upper()
+        break
+    return model
+
+
 def init() -> None:
     config_yaml = Path("./config.yaml")
     print("Let's get started with some basic configuration.")
     time.sleep(0.5)
+    role = "translate"
+    if input("Press Enter To Continue...").strip() == "test":
+        role = 'talk'
     try:
         # Collect lang
-        source_lang, target_lang = collect_lang()
-        sys.stdout.write(
-            f'\nTranslate from \033[34m{source_lang}\033[0m to \033[31m{target_lang}\033[0m.'
-            f'\nYou can change this option later using \033[33m/lang\033[0m.\n\n'
-        )
-        time.sleep(0.5)
-
+        if role == "translate":
+            source_lang, target_lang = collect_lang()
+            sys.stdout.write(
+                f"\nTranslate from \033[34m{source_lang}\033[0m to \033[31m{target_lang}\033[0m."
+                f"\nYou can change this option later using \033[33m/lang\033[0m.\n\n"
+            )
+            time.sleep(0.5)
+        else:
+            print("Test mode enabled.\n")
+            time.sleep(0.5)
         # Collect provider, key and base_url
         provider, api_key, base_url = collect_provider_and_api_key()
-        sys.stdout.write(
-            "\nAuthentication succeed. "
-            "\nYou can change the provider later using \033[33m/prov <PROVIDER>\033[0m.\n\n"
-        )
+        if provider != "LOCAL":
+            sys.stdout.write(
+                "\nAuthentication succeed. "
+                "\nYou can change the provider later using \033[33m/prov <PROVIDER>\033[0m.\n\n"
+            )
+        else:
+            print("Testing local model.\n")
+
         time.sleep(0.5)
 
         # Collect model
-        model = collect_model(provider=provider, api_key=api_key)
+        if provider != "LOCAL":
+            model = collect_model_remote(provider=provider, api_key=api_key)
+        else:
+            model = collect_model_local()
+
         sys.stdout.write(
             f"\nUsing \033[32m{model}\033[0m to translate. "
-            f"\nYou can change the model later using \033[33m/model\033[0m.\n\n")
+            f"\nYou can change the model later using \033[33m/model\033[0m.\n\n"
+        )
+        data = {
+            "role": role,
+            "model": model,
+            "provider": provider,
+            "base_url": base_url,
+            "api_key": api_key,
+        }
+        if role == "translate":
+            data = {**data, "source_lang": source_lang, "target_lang": target_lang}
         with open(config_yaml, "w") as outfile:
-            yaml.dump(
-                {
-                    "source_lang": source_lang,
-                    "target_lang": target_lang,
-                    "provider": provider,
-                    "base_url": base_url,
-                    "model": model,
-                    "api_key": api_key,
-                },
-                outfile, Dumper=yaml.SafeDumper
-            )
+            yaml.dump(data, outfile, Dumper=yaml.SafeDumper)
     except KeyboardInterrupt:
-        sys.stdout.write("\nYour config will not be saved."
-                         "\nExiting...\n")
+        sys.stdout.write("\nYour config will not be saved." "\nExiting...\n")
 
 
 if __name__ == "__main__":
