@@ -55,7 +55,7 @@ def command_help_normal(args):
         "  /model\tSelect model\n"
         "  /prov\t\tChange model source\n"
         "  /show\t\tShow current config\n"
-        "  /prompt\tSelect role\n"
+        "  /role\tSelect role\n"
         "  /bye\t\tExit\n"
         "  /?, /help\tHelp for a command\n"
         "  /? shortcut\tHelp for keyboard shortcuts\n\n"

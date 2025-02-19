@@ -162,14 +162,14 @@ def collect_model_remote(provider, api_key) -> str:
         models.append(model.id)
     if provider == "ALIYUN":
         models += [
-            "deepseek-r1",
+            # "deepseek-r1",
             "deepseek-v3",
-            "deepseek-r1-distill-qwen-1.5b",
-            "deepseek-r1-distill-qwen-14b",
-            "deepseek-r1-distill-qwen-32b",
-            "deepseek-r1-distill-llama-70b",
-            "deepseek-r1-distill-llama-8b",
-            "deepseek-r1-distill-qwen-7b",
+            # "deepseek-r1-distill-qwen-1.5b",
+            # "deepseek-r1-distill-qwen-14b",
+            # "deepseek-r1-distill-qwen-32b",
+            # "deepseek-r1-distill-llama-70b",
+            # "deepseek-r1-distill-llama-8b",
+            # "deepseek-r1-distill-qwen-7b",
         ]
     models.sort()
     print(f"Available models in {provider}: \n")

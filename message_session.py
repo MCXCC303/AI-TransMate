@@ -11,7 +11,7 @@ def remote_talk(text):
     messages = [{"role": "user", "content": text}]
     client = openai.OpenAI(api_key=config["api_key"], base_url=config["base_url"])
     if config["role"] == "translate":
-        prompt_file = "prompt/Translator.json"
+        prompt_file = "prompt/translate.json"
         with open("lang/en_US.json") as json_file:
             mapping = json.load(json_file)
         source_lang = mapping[config["source_lang"]]
@@ -78,7 +78,7 @@ def local_talk(text):
         config = yaml.load(conf, Loader=yaml.FullLoader)
     messages = [{"role": "user", "content": text}]
     if config["role"] == "translate":
-        prompt_file = "prompt/Translator.json"
+        prompt_file = "prompt/translate.json"
         with open("lang/en_US.json") as json_file:
             mapping = json.load(json_file)
         source_lang = mapping[config["source_lang"]]
@@ -117,12 +117,12 @@ def local_talk(text):
                 f'\033[1A\033[2K\033[90mThinking{"." * (len(full_reason_content) % 6 + 1)}\033[0m\n'
             )
         else:
-            if not full_reason_content:
-                with open("reasoning.md", "a") as f:
-                    f.write('It seems that this model is not thinking or this model does not support it.')
             full_answer_content.append(chunk_message)
             sys.stdout.write(chunk_message)
             sys.stdout.flush()
             with open("output.md", "a") as f:
                 f.write(chunk_message)
+    if not full_reason_content:
+        with open("reasoning.md", "a") as f:
+            f.write('It seems that this model is not thinking or this model does not support it.')
     print()
