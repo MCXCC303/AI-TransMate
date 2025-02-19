@@ -158,9 +158,10 @@ def collect_model(provider, api_key) -> str:
             continue
         models.append(model.id)
     if provider == 'ALIYUN':
-        models += ['deepseek-r1', 'deepseek-v3', "deepseek-r1-distill-qwen-1.5b", "deepseek-r1-distill-qwen-14b",
-                   "deepseek-r1-distill-qwen-32b", "deepseek-r1-distill-llama-70b", "deepseek-r1-distill-llama-8b",
-                   "deepseek-r1-distill-qwen-7b"]
+        # models += ['deepseek-r1', 'deepseek-v3', "deepseek-r1-distill-qwen-1.5b", "deepseek-r1-distill-qwen-14b",
+        #            "deepseek-r1-distill-qwen-32b", "deepseek-r1-distill-llama-70b", "deepseek-r1-distill-llama-8b",
+        #            "deepseek-r1-distill-qwen-7b"]
+        models += ['deepseek-v3']
     models.sort()
     print(f'Available models in {provider}: \n')
     ommition = 10
