@@ -163,7 +163,7 @@ def collect_model_remote(provider, api_key) -> str:
     if provider == "ALIYUN":
         models += [
             # "deepseek-r1",
-            "deepseek-v3",
+            # "deepseek-v3",
             # "deepseek-r1-distill-qwen-1.5b",
             # "deepseek-r1-distill-qwen-14b",
             # "deepseek-r1-distill-qwen-32b",

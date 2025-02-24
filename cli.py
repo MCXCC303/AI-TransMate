@@ -19,15 +19,8 @@ import yaml
 
 
 def display_config(file_path):
-    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".swp", text=True)
-    try:
-        with open(file_path, "r") as src, os.fdopen(tmp_fd, "w") as dst:
-            shutil.copyfileobj(src, dst)
-        os.chmod(tmp_name, 0o444)
-        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
-        subprocess.call([editor, tmp_name])
-    finally:
-        os.unlink(tmp_name)
+    with open(file_path, "r") as src:
+        subprocess.run(['less'], stdin=src)
 
 
 def command_bye(args):
