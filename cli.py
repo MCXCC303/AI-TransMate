@@ -9,14 +9,13 @@ from message_session import remote_talk, local_talk
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from time import sleep
+from generate_hash import by_timestamp
 import openai
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 import yaml
-
+from ansi_chars import TerminalColor
 
 def display_config(file_path):
     with open(file_path, "r") as src:
@@ -37,7 +36,7 @@ def command_help_translate(args):
         "  /switch\tSwitch source and target\n"
         "  /bye\t\tExit\n"
         "  /?, /help\tHelp for a command\n"
-        "  \033[90m/? shortcut\tHelp for keyboard shortcuts\033[0m\n\n"
+        f"  {TerminalColor.GRAY.value}/? shortcut\tHelp for keyboard shortcuts{TerminalColor.RESET.value}\n\n"
         'Use """ to begin a multi-line message.\n'
     )
 
@@ -53,7 +52,7 @@ def command_help_normal(args):
         "  /?, /help\tHelp for a command\n"
         "  /? shortcut\tHelp for keyboard shortcuts\n\n"
         'Use """ to begin a multi-line message.\n'
-        "\n\033[90m(Test mode enabled.)\033[0m"
+        f"\n{TerminalColor.GRAY.value}(Test mode enabled.){TerminalColor.RESET.value}"
     )
 
 
@@ -75,7 +74,7 @@ def command_switch(args):
     with open("config.yaml", "w", encoding="utf-8") as conf:
         yaml.dump(config, conf, Dumper=yaml.SafeDumper)
     print(
-        f"Current language setting: \033[34m{config['source_lang']}\033[0m to \033[31m{config['target_lang']}\033[0m."
+        f"Current language setting: {TerminalColor.BLUE.value}{config['source_lang']}{TerminalColor.RESET.value} to {TerminalColor.RED.value}{config['target_lang']}{TerminalColor.RESET.value}."
     )
 
 
@@ -88,7 +87,7 @@ def command_lang(args):
     with open("config.yaml", "w", encoding="utf-8") as conf:
         yaml.dump(config, conf, Dumper=yaml.SafeDumper)
     print(
-        f"Current language setting: \033[34m{config['source_lang']}\033[0m to \033[31m{config['target_lang']}\033[0m."
+        f"Current language setting: {TerminalColor.BLUE.value}{config['source_lang']}{TerminalColor.RESET.value} to {TerminalColor.RED.value}{config['target_lang']}{TerminalColor.RESET.value}."
     )
 
 
@@ -103,7 +102,7 @@ def command_model(args):
         config["model"] = collect_model_local()
     with open("config.yaml", "w", encoding="utf-8") as conf:
         yaml.dump(config, conf, Dumper=yaml.SafeDumper)
-    print(f"Current model setting: \033[34m{config['model']}\033[0m.")
+    print(f"Current model setting: {TerminalColor.BLUE.value}{config['model']}{TerminalColor.RESET.value}.")
 
 
 def command_prov(args):
@@ -122,7 +121,7 @@ def command_prov(args):
     with open("config.yaml", "w", encoding="utf-8") as conf:
         yaml.dump(config, conf, Dumper=yaml.SafeDumper)
     print(
-        f"Using \033[32m{config['model']}\033[0m from \033[32m{config['provider']}\033[0m."
+        f"Using {TerminalColor.GREEN.value}{config['model']}{TerminalColor.RESET.value} from {TerminalColor.GREEN.value}{config['provider']}{TerminalColor.RESET.value}."
     )
 
 
@@ -188,7 +187,8 @@ def parse_command_test(command_text: str):
     command_mapping[command](args)
 
 
-def cli() -> None:
+def cli_old() -> None:
+    history_file_id = by_timestamp()
     # Check connection
     with open("config.yaml", "r", encoding="utf-8") as conf:
         config = yaml.load(conf, Loader=yaml.FullLoader)
@@ -198,22 +198,26 @@ def cli() -> None:
                 client = openai.OpenAI(
                     api_key=config["api_key"], base_url=config["base_url"]
                 )
-                response = client.models.list()
+                try:
+                    response = client.models.list()
+                except openai.NotFoundError:
+                    pass
                 print(
-                    f"Connected to \033[36m{config['provider']}\033[0m."
-                    f"\nUsing \033[32m{config['model']}\033[0m to Translate."
+                    f"Connected to {TerminalColor.CYAN.value}{config['provider']}{TerminalColor.RESET.value}."
+                    f"\nUsing {TerminalColor.GREEN.value}{config['model']}{TerminalColor.RESET.value} to Translate."
                 )
             else:
                 print("Using Local Models.")
             sleep(0.3)
             if config["role"] == "translate":
                 print(
-                    f"Current language setting: \033[34m{config['source_lang']}\033[0m to \033[31m{config['target_lang']}\033[0m."
+                    f"Current language setting: {TerminalColor.BLUE.value}{config['source_lang']}{TerminalColor.RESET.value} to {TerminalColor.RED.value}{config['target_lang']}{TerminalColor.RESET.value}."
                 )
             else:
                 print(f"Test mode enabled. This may occur unexpected errors.")
             sleep(0.5)
-            print("\033[90m(/? for help)\033[0m\n")
+            print(f"Current Session ID: {TerminalColor.YELLOW.value}{history_file_id}{TerminalColor.RESET.value}.")
+            print(f"{TerminalColor.GRAY.value}(/? for help){TerminalColor.RESET.value}\n")
             break
         except KeyboardInterrupt:
             print("Exiting...")
@@ -224,7 +228,7 @@ def cli() -> None:
     # history enabled
     session = PromptSession(history=FileHistory(".translate_history"))
     multiline_mode = False
-    buffer = []
+    buffer: list = []
     while True:
         talk = remote_talk
         if config["provider"] == "LOCAL":
@@ -243,7 +247,7 @@ def cli() -> None:
                         continue
                     message = text
                     # session create by message
-                    talk(message)
+                    talk(text=message, history_id=history_file_id)
                     continue
 
                 multiline_mode = True
@@ -254,7 +258,7 @@ def cli() -> None:
                 if stripped_text == '"""':  # End multiline
                     multiline_mode = False
                     message = "\n".join(buffer)
-                    talk(text=message)
+                    talk(text=message, history_id=history_file_id)
                     buffer = []
                 else:
                     buffer.append(text)
@@ -269,6 +273,111 @@ def cli() -> None:
             if multiline_mode:
                 multiline_mode = False
                 buffer = []
+            print()
+            continue
+def cli() -> None:
+    history_file_id = by_timestamp()
+    # Check connection
+    with open("config.yaml", "r", encoding="utf-8") as conf:
+        config = yaml.load(conf, Loader=yaml.FullLoader)
+    while True:
+        try:
+            if config["provider"] != "LOCAL":
+                client = openai.OpenAI(
+                    api_key=config["api_key"], base_url=config["base_url"]
+                )
+                try:
+                    response = client.models.list()
+                except openai.NotFoundError:
+                    pass
+                print(
+                    f"Connected to {TerminalColor.CYAN.value}{config['provider']}{TerminalColor.RESET.value}."
+                    f"\nUsing {TerminalColor.GREEN.value}{config['model']}{TerminalColor.RESET.value} to Translate."
+                )
+            else:
+                print("Using Local Models.")
+            sleep(0.3)
+            if config["role"] == "translate":
+                print(
+                    f"Current language setting: {TerminalColor.BLUE.value}{config['source_lang']}{TerminalColor.RESET.value} to {TerminalColor.RED.value}{config['target_lang']}{TerminalColor.RESET.value}."
+                )
+            else:
+                print(f"Test mode enabled. This may occur unexpected errors.")
+            sleep(0.5)
+            print(f"Current Session ID: {TerminalColor.YELLOW.value}{history_file_id}{TerminalColor.RESET.value}.")
+            print(f"{TerminalColor.GRAY.value}(/? for help){TerminalColor.RESET.value}\n")
+            break
+        except KeyboardInterrupt:
+            print("Exiting...")
+            return
+        except:
+            print(f"Failed to connect to {config['provider']}. Retrying...")
+            sleep(1)
+
+    # 创建PromptSession时配置续行提示符
+    session = PromptSession(
+        history=FileHistory(".translate_history"),
+        prompt_continuation=lambda width, line_number, wrap_count: (
+            f"... "
+            if line_number > 0 else ""
+        ),
+        wrap_lines=True
+    )
+
+    multiline_mode = False
+    buffer: list = []
+    while True:
+        talk = remote_talk if config["provider"] != "LOCAL" else local_talk
+        try:
+            if not multiline_mode:
+                try:
+                    text = session.prompt(">>> ")
+                except KeyboardInterrupt:
+                    continue
+
+                # 检测粘贴的多行内容（包含换行符）
+                if '\n' in text:
+                    lines = text.split('\n')
+                    # 显示粘贴的多行内容模拟多行输入
+                    for line in lines[1:]:
+                        print(f"... {line}")
+                    # 合并处理所有行
+                    message = '\n'.join(lines)
+                    talk(text=message, history_id=history_file_id)
+                    continue
+
+                stripped_text = text.strip()
+                if stripped_text.startswith('"""') and len(stripped_text) > 3:
+                    continue
+                if stripped_text == '"""':
+                    multiline_mode = True
+                    buffer = []
+                else:
+                    if not text:
+                        continue
+                    if text.startswith("/"):
+                        parse_command(text[1:])
+                        continue
+                    talk(text=text, history_id=history_file_id)
+            else:
+                text = session.prompt("... ")
+                stripped_text = text.strip()
+                if stripped_text == '"""':
+                    multiline_mode = False
+                    message = "\n".join(buffer)
+                    talk(text=message, history_id=history_file_id)
+                    buffer = []
+                else:
+                    buffer.append(text)
+
+        except EOFError:
+            print("Exiting...")
+            break
+        except KeyboardInterrupt:
+            if multiline_mode:
+                multiline_mode = False
+                buffer = []
+            print()
             continue
 
 

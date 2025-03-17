@@ -3,9 +3,14 @@ import openai
 import sys
 import yaml
 import ollama
+from ansi_chars import TerminalColor
+import datetime
 
 
-def remote_talk(text):
+def remote_talk(text:str, history_id:str='0000000'):
+    current_time = datetime.datetime.now().strftime("%Y.%m.%d, %H:%M")
+    reasoning_file_name = f'./history/{history_id}_reasoning.md'
+    output_file_name = f'./history/{history_id}_output.md'
     with open("config.yaml", "r", encoding="utf-8") as conf:
         config = yaml.load(conf, Loader=yaml.FullLoader)
     messages = [{"role": "user", "content": text}]
@@ -29,10 +34,10 @@ def remote_talk(text):
     )
     reasoning_response = []
     full_response = []
-    with open("output.md", "a") as output:
-        output.write(f"\n\n---\n\n> Input: \n\n{text}\n\n> Output:\n\n")
-    with open("reasoning.md", "a") as output:
-        output.write(f"\n\n---\n\n> Input: \n\n{text}\n\n> Reasoning Content:\n\n")
+    with open(output_file_name, "a") as output:
+        output.write(f"\n\n---\n\n`{current_time}`\n> Input: \n\n{text}\n\n> Output:\n\n")
+    with open(reasoning_file_name, "a") as output:
+        output.write(f"\n\n---\n\n`{current_time}`\n> Input: \n\n{text}\n\n> Reasoning Content:\n\n")
     sys.stdout.write("\n")
     for chunk in response:
         reason_text_length = len("".join(reasoning_response))
@@ -47,9 +52,9 @@ def remote_talk(text):
                 reasoning_response.append(reasoning_content)
             if len("".join(reasoning_response)) > reason_text_length:
                 sys.stdout.write(
-                    f"\033[1A\033[2K\033[90mThinking{'.' * (len(reasoning_response) % 6 + 1)}\033[0m\n"
+                    f"{TerminalColor.MOVE_TO_LAST_LINE.value}{TerminalColor.CLEAR_LINE.value}{TerminalColor.GRAY.value}Thinking{'.' * (len(reasoning_response) % 6 + 1)}{TerminalColor.RESET.value}\n"
                 )
-                with open("reasoning.md", "a") as output:
+                with open(reasoning_file_name, "a") as output:
                     output.write(reasoning_content)
                 sys.stdout.flush()
         except AttributeError:
@@ -59,21 +64,24 @@ def remote_talk(text):
             full_response.append(content)
             sys.stdout.write(content)
             sys.stdout.flush()
-            with open("output.md", "a") as output:
+            with open(output_file_name, "a") as output:
                 output.write(content)
     print()
     if full_response and not reasoning_response:
-        with open("reasoning.md", "a") as f:
+        with open(reasoning_file_name, "a") as f:
             f.write('It seems that this model is not thinking or this model does not support it.')
     if not full_response:
         sys.stdout.write(
-            "\033[90;3mService busy. Try again later or change a provider.\033[0m\n"
+            f"{TerminalColor.GRAY_ITALIC.value}Service busy. Try again later or change a provider.{TerminalColor.RESET.value}\n"
         )
-        with open("output.md", "a") as output:
+        with open(output_file_name, "a") as output:
             output.write("Service busy. Try again later.")
 
 
-def local_talk(text):
+def local_talk(text:str, history_id:str='0000000'):
+    current_time = datetime.datetime.now().strftime("%Y.%m.%d, %H:%M")
+    reasoning_file_name = f'./history/{history_id}_reasoning.md'
+    output_file_name = f'./history/{history_id}_output.md'
     with open("config.yaml", "r", encoding="utf-8") as conf:
         config = yaml.load(conf, Loader=yaml.FullLoader)
     messages = [{"role": "user", "content": text}]
@@ -96,10 +104,10 @@ def local_talk(text):
     full_answer_content = []
     thinking = False
     sys.stdout.write("\n")
-    with open("output.md", "a") as output:
-        output.write(f"\n\n---\n\n> Input: \n\n{text}\n\n> Output:\n\n")
-    with open("reasoning.md", "a") as output:
-        output.write(f"\n\n---\n\n> Input: \n\n{text}\n\n> Reasoning Content:\n\n")
+    with open(output_file_name, "a") as output:
+        output.write(f"\n\n---\n\n`{current_time}`> Input: \n\n{text}\n\n> Output:\n\n")
+    with open(reasoning_file_name, "a") as output:
+        output.write(f"\n\n---\n\n`{current_time}`> Input: \n\n{text}\n\n> Reasoning Content:\n\n")
     for chunk in response:
         chunk_message = chunk["message"]["content"]
         if chunk_message == "<think>":
@@ -107,22 +115,23 @@ def local_talk(text):
             continue
         if chunk_message == "</think>":
             thinking = False
-            sys.stdout.write("\033[1A\033[2K\033[0m")
+            sys.stdout.write(f"{TerminalColor.MOVE_TO_LAST_LINE.value}{TerminalColor.CLEAR_LINE.value}{TerminalColor.RESET.value}")
             continue
         if thinking:
             full_reason_content.append(chunk_message)
-            with open("reasoning.md", "a") as f:
+            with open(reasoning_file_name, "a") as f:
                 f.write(chunk_message)
             sys.stdout.write(
-                f'\033[1A\033[2K\033[90mThinking{"." * (len(full_reason_content) % 6 + 1)}\033[0m\n'
+                f'{TerminalColor.MOVE_TO_LAST_LINE.value}{TerminalColor.CLEAR_LINE.value}{TerminalColor.GRAY.value}Thinking{"." * (len(full_reason_content) % 6 + 1)}{TerminalColor.RESET.value}\n'
             )
         else:
             full_answer_content.append(chunk_message)
             sys.stdout.write(chunk_message)
             sys.stdout.flush()
-            with open("output.md", "a") as f:
+            with open(output_file_name, "a") as f:
                 f.write(chunk_message)
     if not full_reason_content:
-        with open("reasoning.md", "a") as f:
+        with open(reasoning_file_name, "a") as f:
             f.write('It seems that this model is not thinking or this model does not support it.')
     print()
+

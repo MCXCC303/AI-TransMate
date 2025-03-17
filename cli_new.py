@@ -4,9 +4,6 @@ from pathlib import Path
 import tempfile
 import shutil
 import subprocess
-
-from numpy.lib.utils import source
-
 from create_config import collect_lang
 
 # 常量定义

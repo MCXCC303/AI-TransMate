@@ -6,7 +6,7 @@ import yaml
 from pathlib import Path
 import getpass
 import ollama
-
+from ansi_chars import TerminalColor
 
 def collect_lang() -> tuple:
     with open("lang/en_US.json") as jsonfile:
@@ -20,7 +20,7 @@ def collect_lang() -> tuple:
         count += 1
         if count % 2 == 0:
             sys.stdout.write("\n")
-    sys.stdout.write("\n\n\033[1;32mSource Language: \033[0m")
+    sys.stdout.write(f"\n\n{TerminalColor.GREEN_BOLD.value}Source Language: {TerminalColor.RESET.value}")
     sys.stdout.flush()
     while True:
         input_source_lang = input().strip()
@@ -32,19 +32,19 @@ def collect_lang() -> tuple:
             pass
         except IndexError:
             sys.stdout.write(
-                "\nERROR: Source language not exist.\n"
-                "\n\033[1;32mSource Language: \033[0m"
+                f"\nERROR: Source language not exist.\n"
+                f"\n{TerminalColor.GREEN_BOLD.value}Source Language: {TerminalColor.RESET.value}"
             )
             continue
         source_lang = input_source_lang
         if source_lang not in mapping.keys():
             sys.stdout.write(
                 f"\nERROR: Language {source_lang} not available.\n"
-                f"\n\033[1;32mSource Language: \033[0m"
+                f"\n{TerminalColor.GREEN_BOLD.value}Source Language: {TerminalColor.RESET.value}"
             )
             continue
         break
-    sys.stdout.write("\033[1;32mTarget Language: \033[0m")
+    sys.stdout.write(f"{TerminalColor.GREEN_BOLD.value}Target Language: {TerminalColor.RESET.value}")
     sys.stdout.flush()
     while True:
         input_target_lang = input().strip()
@@ -58,27 +58,27 @@ def collect_lang() -> tuple:
             pass
         except IndexError:
             sys.stdout.write(
-                "\nERROR: Target language not exist.\n"
-                "\n\033[1;32mTarget Language: \033[0m"
+                f"\nERROR: Target language not exist.\n"
+                f"\n{TerminalColor.GREEN_BOLD.value}Target Language: {TerminalColor.RESET.value}"
             )
             continue
         except KeyError:
             sys.stdout.write(
                 f"\nERROR: Can not translate from {target_lang} to itself.\n"
-                f"\n\033[1;32mTarget Language: \033[0m"
+                f"\n{TerminalColor.GREEN_BOLD.value}Target Language: {TerminalColor.RESET.value}"
             )
             continue
         target_lang = input_target_lang
         if target_lang == source_lang:
             sys.stdout.write(
                 f"\nERROR: Can not translate from {target_lang} to itself.\n"
-                f"\n\033[1;32mTarget Language: \033[0m "
+                f"\n{TerminalColor.GREEN_BOLD.value}Target Language: {TerminalColor.RESET.value} "
             )
             continue
         if target_lang not in mapping.keys():
             sys.stdout.write(
                 f"\nERROR: Language {input_target_lang} not available.\n"
-                f"\n\033[1;32mTarget Language: \033[0m"
+                f"\n{TerminalColor.GREEN_BOLD.value}Target Language: {TerminalColor.RESET.value}"
             )
             continue
         break
@@ -94,22 +94,25 @@ def collect_provider_and_api_key() -> tuple:
     for prov in providers:
         sys.stdout.write(f"\t{count}): {prov}\n")
         count += 1
-    sys.stdout.write("\n\033[1;32m>>>\033[0m ")
+    sys.stdout.write(f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value} ")
     while True:
         input_provider = input().strip()
         try:
             provider = providers[int(input_provider)]
             break
         except IndexError:
-            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write(f"\nERROR: Model not exist." 
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value}")
             continue
         except KeyError:
-            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write(f"\nERROR: Model not exist." 
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value}")
             continue
         except ValueError:
             pass
         if input_provider.upper() not in providers:
-            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write(f"\nERROR: Model not exist." 
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value}")
             continue
         provider = input_provider.upper()
         break
@@ -121,7 +124,13 @@ def collect_provider_and_api_key() -> tuple:
             api_key = getpass.getpass(f"Enter your API key in {provider}: ")
             sys.stdout.write("\033[1A\033[2K\nVerifying your API key...\n")
             client = openai.OpenAI(api_key=api_key, base_url=urls[provider])
-            client.models.list()
+            try:
+                client.models.list()
+            except openai.NotFoundError:
+                if provider.upper() == "VOLCE":
+                    pass
+                else:
+                    raise openai.AuthenticationError
             break
         except KeyboardInterrupt:
             sys.stdout.write("\nERROR: API key verification failed.\n")
@@ -133,6 +142,10 @@ def collect_provider_and_api_key() -> tuple:
 
 
 def collect_model_remote(provider, api_key) -> str:
+    if provider == "VOLCE":
+        sys.stdout.write(f"Enter model id to use: \n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value} ")
+        input_model = input().strip()
+        return input_model
     with open("./providers/provider_list.yml", "r") as file:
         urls = yaml.load(file, Loader=yaml.FullLoader)
     with open("./providers/model_info.yaml", "r") as file:
@@ -182,14 +195,15 @@ def collect_model_remote(provider, api_key) -> str:
     else:
         for model in models:
             print(f"\t{model}")
-    sys.stdout.write("\n\033[1;32m>>>\033[0m ")
+    sys.stdout.write(f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value} ")
     sys.stdout.flush()
     while True:
         try:
             input_model = input().strip()
             if input_model in models:
                 break
-            sys.stdout.write("ERROR: Model not found." "\n\033[1;32m>>>\033[0m ")
+            sys.stdout.write(f"ERROR: Model not found."
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value} ")
             sys.stdout.flush()
         except KeyboardInterrupt:
             sys.stdout.write("\nERROR: No model selected.\n")
@@ -210,17 +224,19 @@ def collect_model_local():
     for model in models:
         sys.stdout.write(f"\t{count}): {model}\n")
         count += 1
-    sys.stdout.write("\n\033[1;32m>>>\033[0m ")
+    sys.stdout.write(f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value} ")
     while True:
         input_model = input().strip()
         try:
             model = models[int(input_model)]
             break
         except IndexError:
-            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write(f"\nERROR: Model not exist."
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value}")
             continue
         except KeyError:
-            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write(f"\nERROR: Model not exist."
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value}")
             continue
         except ValueError:
             pass
@@ -229,7 +245,8 @@ def collect_model_local():
             sys.stdout.flush()
             raise KeyboardInterrupt
         if input_model.upper() not in models:
-            sys.stdout.write("\nERROR: Model not exist." "\n\033[1;32m>>>\033[0m")
+            sys.stdout.write(f"\nERROR: Model not exist."
+                             f"\n{TerminalColor.GREEN_BOLD.value}>>>{TerminalColor.RESET.value}")
             continue
         model = input_model.upper()
         break
@@ -248,8 +265,8 @@ def init() -> None:
         if role == "translate":
             source_lang, target_lang = collect_lang()
             sys.stdout.write(
-                f"\nTranslate from \033[34m{source_lang}\033[0m to \033[31m{target_lang}\033[0m."
-                f"\nYou can change this option later using \033[33m/lang\033[0m.\n\n"
+                f"\nTranslate from {TerminalColor.BLUE.value}{source_lang}{TerminalColor.RESET.value} to \033[31m{target_lang}{TerminalColor.RESET.value}."
+                f"\nYou can change this option later using {TerminalColor.YELLOW.value}/lang{TerminalColor.RESET.value}.\n\n"
             )
             time.sleep(0.5)
         else:
@@ -259,8 +276,8 @@ def init() -> None:
         provider, api_key, base_url = collect_provider_and_api_key()
         if provider != "LOCAL":
             sys.stdout.write(
-                "\nAuthentication succeed. "
-                "\nYou can change the provider later using \033[33m/prov <PROVIDER>\033[0m.\n\n"
+                f"\nAuthentication succeed. "
+                f"\nYou can change the provider later using {TerminalColor.YELLOW.value}/prov <PROVIDER>{TerminalColor.RESET.value}.\n\n"
             )
         else:
             print("Testing local model.\n")
@@ -274,8 +291,8 @@ def init() -> None:
             model = collect_model_local()
 
         sys.stdout.write(
-            f"\nUsing \033[32m{model}\033[0m to translate. "
-            f"\nYou can change the model later using \033[33m/model\033[0m.\n\n"
+            f"\nUsing {TerminalColor.GREEN.value}{model}{TerminalColor.RESET.value} to translate. "
+            f"\nYou can change the model later using {TerminalColor.YELLOW.value}/model{TerminalColor.RESET.value}.\n\n"
         )
         data = {
             "role": role,
