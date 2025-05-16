@@ -1,3 +1,4 @@
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from create_config import (
     init,
     collect_lang,
@@ -11,11 +12,14 @@ from prompt_toolkit.history import FileHistory
 from time import sleep
 from generate_hash import by_timestamp
 import openai
+from openai import BadRequestError
 import os
 import subprocess
 import sys
 import yaml
 from ansi_chars import TerminalColor
+import re
+
 
 def display_config(file_path):
     with open(file_path, "r") as src:
@@ -226,7 +230,8 @@ def cli_old() -> None:
             print(f"Failed to connect to {config['provider']}. Retrying...")
             sleep(1)
     # history enabled
-    session = PromptSession(history=FileHistory(".translate_history"))
+    session = PromptSession(history=FileHistory(".translate_history"),
+                            auto_suggest=AutoSuggestFromHistory())
     multiline_mode = False
     buffer: list = []
     while True:
@@ -275,6 +280,8 @@ def cli_old() -> None:
                 buffer = []
             print()
             continue
+
+
 def cli() -> None:
     history_file_id = by_timestamp()
     # Check connection
@@ -379,6 +386,16 @@ def cli() -> None:
                 buffer = []
             print()
             continue
+        except BadRequestError as e:
+            if e.code == 'invalid_request_error' and "maximum context length" in str(e):
+                error_msg = e.response.json()["error"]["message"]
+                max_tokens = re.search(r"maximum context length is (\d+) tokens", error_msg)
+                requested_tokens = re.search(r"requested (\d+) tokens", error_msg)
+                print(f"{TerminalColor.RED.value}Your input is {int(requested_tokens.group(1))/int(max_tokens.group(1))*100:.2f}% of maximum tokens. Cut off some content to continue.{TerminalColor.RESET.value}")
+            else:
+                print(e)
+            continue
+
 
 
 if __name__ == "__main__":

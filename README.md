@@ -1,6 +1,6 @@
 <h1 align="center">AI TransMate</h1>
 <p align="center">
-  <b>使用大模型API的多语言翻译</b>
+  <b>终端API调用大模型对话</b>
 </p>
 <p align="center">
   <img src="https://github.com/MCXCC303/images/blob/main/AI%20TransMate/scq7o-0h8l1.gif">
@@ -14,6 +14,8 @@
 
 ---
 
+> Note: 当前功能正在测试中
+
 <h2 align="center">安装依赖 | Install Requirements</h2>
 
 ```shell
@@ -26,7 +28,9 @@ pip install -r requirements.txt
 python cli.py
 ```
 
-### 预览：
-<p align="center">
-  <img src="https://github.com/MCXCC303/images/blob/main/AI%20TransMate/20250213_12h49m41s_grim.png">
-</p>
+---
+
+<h2 align="center">特点</h2>
+- 终端应用，还原ollama样式
+- 实时渲染MarkDown和LaTeX语法
+

@@ -153,7 +153,7 @@ def collect_model_remote(provider, api_key) -> str:
     client = openai.OpenAI(api_key=api_key, base_url=urls[provider])
     models = []
     filter_models = [
-        "code",
+        # "code",
         # 'math',
         "ocr",
         "vl",
