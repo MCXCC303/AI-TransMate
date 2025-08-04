@@ -20,10 +20,15 @@ import yaml
 from ansi_chars import TerminalColor
 import re
 
+__SESSION_ID = ""
+
 
 def display_config(file_path):
     with open(file_path, "r") as src:
         subprocess.run(['less'], stdin=src)
+
+def command_id(args):
+    print(f"Current Session ID: {TerminalColor.YELLOW.value}{__SESSION_ID}{TerminalColor.RESET.value}.")
 
 
 def command_bye(args):
@@ -137,6 +142,7 @@ def parse_command(command_text: str):
         "bye": command_bye,
         "help": command_help_translate,
         "?": command_help_translate,
+        "id": command_id,
         "show": command_show,
         "model": command_model,
         "prov": command_prov,
@@ -149,8 +155,12 @@ def parse_command(command_text: str):
     command_mapping_talk = {**command_mapping_basic}
     role_mapping = {'translate': command_mapping_translate,
                     'talk': command_mapping_talk}
-    command = command_text.split()[0]
-    args = command_text.split()[1:]
+    try:
+        command = command_text.split()[0]
+        args = command_text.split()[1:]
+    except Exception as e:
+        print(f"Unknown command. Type /? for help")
+        return
     if command not in role_mapping[role].keys():
         print(f"Unknown command '/{command}'. Type /? for help")
         return
@@ -283,7 +293,9 @@ def cli_old() -> None:
 
 
 def cli() -> None:
+    global __SESSION_ID
     history_file_id = by_timestamp()
+    __SESSION_ID = history_file_id
     # Check connection
     with open("config.yaml", "r", encoding="utf-8") as conf:
         config = yaml.load(conf, Loader=yaml.FullLoader)

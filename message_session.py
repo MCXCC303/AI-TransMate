@@ -50,7 +50,7 @@ def timeit(func):
 
 # @timeit
 def remote_talk(text: str, history_id: str = '0000000'):
-    console = Console()
+    console = Console(record=True)
     current_time = datetime.datetime.now().strftime("%Y.%m.%d, %H:%M")
     reasoning_file_name = f'./history/{history_id}_reasoning.md'
     output_file_name = f'./history/{history_id}_output.md'

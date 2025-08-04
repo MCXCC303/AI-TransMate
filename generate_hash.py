@@ -8,7 +8,8 @@ def by_timestamp():
     # Use SHA256 to generate
     hash_object = hashlib.sha256(current_time)
     hex_digest = hash_object.hexdigest()
-    return hex_digest[:7]
+    local_time = time.strftime('%y%m%d%H%M')
+    return f"{local_time}-{hex_digest[:7]}"
 
 
 def by_timestamp_with_salt():
@@ -17,4 +18,5 @@ def by_timestamp_with_salt():
     # Use SHA256 to generate
     hash_object = hashlib.sha256(current_time + salt)
     hex_digest = hash_object.hexdigest()
-    return hex_digest[:7]
+    local_time = time.strftime('%y%m%d%H%M')
+    return f"{local_time}-{hex_digest[:7]}"
