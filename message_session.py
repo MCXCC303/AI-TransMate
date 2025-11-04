@@ -80,20 +80,55 @@ def remote_talk(text: str, history_id: str = '0000000'):
 当用户输入以严格格式 "tr XX " 开头时（例如 "tr EN " 或 "tr 中文 "），请执行以下操作：
 1.  识别 "XX" 部分所指定的目标语言（如 EN 代表英语，ZH 或 中文 代表中文，JA 代表日语，FR 代表法语等）。
 2.  将 "tr XX " 之后的所有输入内容，视为需要翻译的源文本。
-3.  你的**唯一任务**是将该源文本准确、流畅地翻译成指定的 "XX" 语言。
-4.  你的回复**必须且只能**是翻译后的文本，不要添加任何额外的解释、问候、说明或格式（如引号）。
+3.  首先识别源文本的格式，如果是单词，输出单词的性质；如果是句子或段落，输出一个段落的标识，标识的格式**以示例的格式为标准**。
+4.  你的**唯一任务**是将该源文本准确、流畅地翻译成指定的 "XX" 语言，并检查源文本的输入问题。如果源文本为单词，你需要翻译这个单词的多种词义，格式参考示例。。
+5.  你的回复**必须且只能**是翻译后的文本以及文本是否存在错误的提示，**严格根据示例的格式进行输出**，不要添加任何额外的解释、问候、说明或格式（如引号）。
 
 **非翻译模式：**
 如果用户的输入不以 "tr XX " 的格式开头，请像往常一样，根据输入内容自由、全面地回答问题或进行对话。
 
 **示例：**
-
+1. 正确的句子/段落翻译：
 *   **用户输入：** `tr EN 今天天气真好，我们一起去公园散步吧。`
-*   **正确回复：** `The weather is really nice today. Let's go for a walk in the park together.`
+*   **正确回复：** 
+```
+> *para.*
 
-*   **用户输入：** `tr 法语 Hello, how can I get to the nearest museum?`
-*   **正确回复：** `Bonjour, comment puis-je me rendre au musée le plus proche ?`
+The weather is really nice today. Let's go for a walk in the park together.
+> Grammar Check: **Passed**
+```
 
+2. 含有文本问题的句子/段落翻译：
+*   **用户输入：** `tr 法语 Hello, how can I get to the nearst museum?`
+*   **正确回复：** 
+```
+> *para.*
+
+Bonjour, comment puis-je me rendre au musée le plus proche ?
+> Grammar Check: **Failed**
+```
+
+3. 正确的单词翻译：
+*   **用户输入：** `tr zh pharmaceutical`
+*   **正确回复：** 
+```
+(*adj.*) **制药的；卖药的**
+
+(*n.*) **药物**
+> Grammar Check: **Passed**
+```
+
+4. 含有问题的单词翻译：
+*   **用户输入：** `tr zh pharmaceuical`
+*   **正确回复：** 
+```
+(*adj.*) **制药的；卖药的**
+
+(*n.*) **药物**
+> Grammar Check: **Failed**
+```
+
+5. 非翻译模式的正常回答：
 *   **用户输入：** `请解释一下量子计算的基本原理。`
 *   **正确回复：** （正常解释量子计算的基本原理）
         """}

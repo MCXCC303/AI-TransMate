@@ -12,7 +12,7 @@ from prompt_toolkit.history import FileHistory
 from time import sleep
 from generate_hash import by_timestamp
 import openai
-from openai import BadRequestError
+from openai import BadRequestError, APIConnectionError
 import os
 import subprocess
 import sys
@@ -406,6 +406,9 @@ def cli() -> None:
                 print(f"{TerminalColor.RED.value}Your input is {int(requested_tokens.group(1))/int(max_tokens.group(1))*100:.2f}% of maximum tokens. Cut off some content to continue.{TerminalColor.RESET.value}")
             else:
                 print(e)
+            continue
+        except APIConnectionError as e:
+            print(f"{TerminalColor.RED.value}Failed to connect to {config['provider']}, please check your network connection.")
             continue
 
 
