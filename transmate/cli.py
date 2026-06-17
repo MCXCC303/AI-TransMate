@@ -16,7 +16,7 @@ from .generate_hash import by_timestamp
 from .config import (
     DEFAULT_CONFIG, PROVIDER_URLS, LANG_MAP,
     load_config, save_config, get_config_dir,
-    migrate_history, _collect_model,
+    _collect_model,
 )
 from .history_viewer import show_history
 from .translator import translate
@@ -72,7 +72,6 @@ class TransMateCLI:
 
     def __init__(self):
         self.config = load_config()
-        migrate_history()
         self.session_id = ""
         self.detected_lang = ""
         self.detected_context = ""

@@ -1,13 +1,12 @@
 """小模型检测：源语言识别 + 翻译语境分析"""
 
+from .config import _load_contents
+
+_PROMPTS = _load_contents("prompts.json")
+
 
 def detect_source_language(text: str, client, model: str) -> str:
-    prompt = (
-        "Identify the language of the following text. "
-        "Reply with ONLY the language name in English (e.g., 'Chinese', 'English', 'Japanese', 'French', 'German', 'Korean', 'Spanish', 'Russian', 'Arabic', etc.). "
-        "Nothing else.\n\n"
-        f"Text: {text}"
-    )
+    prompt = _PROMPTS["detect_lang"].format(text=text)
     try:
         response = client.chat.completions.create(
             model=model,
@@ -22,12 +21,7 @@ def detect_source_language(text: str, client, model: str) -> str:
 
 
 def detect_context(text: str, client, model: str) -> str:
-    prompt = (
-        "Analyze the domain, register, and context of the following text. "
-        "Reply with ONLY a short descriptive label (choose one: 'general', 'technical', 'medical', 'legal', 'literary', 'casual conversation', 'academic', 'business', 'news', 'scientific', 'religious', 'slang/dialect'). "
-        "Nothing else.\n\n"
-        f"Text: {text}"
-    )
+    prompt = _PROMPTS["detect_context"].format(text=text)
     try:
         response = client.chat.completions.create(
             model=model,

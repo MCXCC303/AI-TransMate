@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """AI TransMate — Terminal translation tool with LLM-powered language detection.
 
-Usage: python main.py   or   python -m src.transmate
+Usage: python main.py   or   python -m transmate
 """
 
-from src.transmate.cli import TransMateCLI
+from transmate.cli import TransMateCLI
 
 
 def main():

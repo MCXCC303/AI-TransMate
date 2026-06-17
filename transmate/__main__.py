@@ -1,4 +1,4 @@
-"""Allow running as: python -m src.transmate"""
+"""Allow running as: python -m transmate"""
 from .cli import TransMateCLI
 
 

@@ -1,15 +1,9 @@
 """提示词构建：按缓存优化顺序构建 messages 列表"""
 
-TRANSLATION_ROLE = (
-    "You are a professional translator with expertise across multiple languages and domains. "
-    "Your task is to produce accurate, natural, and contextually appropriate translations. "
-    "Follow these principles:\n"
-    "- Preserve the original meaning, tone, and register of the source text\n"
-    "- Adapt idioms and cultural references naturally to the target language\n"
-    "- Maintain technical accuracy for specialized terminology\n"
-    "- Produce only the translated text, without explanations or notes\n"
-    "- Match the formatting style of the source (paragraphs, lists, line breaks)"
-)
+from .config import _load_contents
+
+_PROMPTS = _load_contents("prompts.json")
+TRANSLATION_ROLE = _PROMPTS["translator_role"]
 
 
 def build_messages(
