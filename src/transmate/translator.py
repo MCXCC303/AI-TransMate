@@ -4,13 +4,12 @@ import datetime
 import sys
 
 import openai
+from rich.console import Console
 
 from .ansi_chars import TerminalColor
 from .config import get_history_dir
 from .detect import detect_source_language, detect_context
-from .output import (
-    print_output, write_reasoning_chunk, finish_thinking,
-)
+from .output import stream_output
 from .prompt_builder import build_messages
 
 
@@ -74,45 +73,15 @@ def translate(text: str, config: dict, history_id: str):
         model=main_model, stream=True, messages=messages
     )
 
-    reasoning_parts = []
-    full_response = []
-    reasoning_active = False
-    content_started = False
-
-    for chunk in response:
-        try:
-            if chunk.choices[0].delta.reasoning_content is not None:
-                rc = chunk.choices[0].delta.reasoning_content
-                reasoning_parts.append(rc)
-                reasoning_active = True
-                write_reasoning_chunk("".join(reasoning_parts))
-                with open(reasoning_file, "a") as f:
-                    f.write(rc)
-        except AttributeError:
-            pass
-
-        if chunk.choices[0].delta.content is not None:
-            content = chunk.choices[0].delta.content
-            full_response.append(content)
-            if reasoning_active:
-                finish_thinking()
-                reasoning_active = False
-            if not content_started:
-                sys.stdout.write(f"\r{TerminalColor.GRAY.value}Translating...{TerminalColor.RESET.value}")
-                sys.stdout.flush()
-                content_started = True
-            with open(output_file, "a") as f:
-                f.write(content)
+    console = Console()
+    full_response, reasoning_parts = stream_output(
+        console, response, reasoning_file, output_file
+    )
 
     # ── 完成 ──
-    if full_response:
-        finish_thinking()
-        sys.stdout.write(f"\r{TerminalColor.CLEAR_LINE.value}\r")
-        sys.stdout.flush()
-        print_output("".join(full_response))
-    else:
+    if not full_response:
         sys.stdout.write(
-            f"\n{TerminalColor.GRAY_ITALIC.value}Service busy. Try again later.{TerminalColor.RESET.value}\n"
+            f"{TerminalColor.GRAY_ITALIC.value}Service busy. Try again later.{TerminalColor.RESET.value}\n"
         )
         with open(output_file, "a") as f:
             f.write("Service busy. Try again later.\n")
