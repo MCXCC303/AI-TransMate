@@ -1,3 +1,6 @@
 openai~=1.63.0
 pyyaml~=6.0.2
 prompt-toolkit~=3.0.50
+ollama~=0.4.7
+rich~=13.9.4
+pylatexenc~=2.10
