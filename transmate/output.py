@@ -1,13 +1,11 @@
-"""终端渲染：LaTeX 转换 + Rich Live 流式渲染"""
+"""终端渲染：LaTeX 转换 + Rich 渲染"""
 
 import re
 import sys
 
 from pylatexenc.latex2text import LatexNodes2Text
 from rich.console import Console
-from rich.live import Live
 from rich.markdown import Markdown
-from rich.text import Text
 
 
 def render_math(text: str) -> str:
@@ -32,44 +30,67 @@ def render_math(text: str) -> str:
     return text
 
 
-def stream_output(console: Console, response, reasoning_file, output_file):
-    """流式遍历 API 响应，实时渲染 LaTeX/Markdown。
+def _parse_usage(u) -> dict:
+    """Extract token usage across multiple API response formats."""
+    details = getattr(u, "prompt_tokens_details", None)
+    hit = getattr(u, "prompt_cache_hit_tokens",
+                  getattr(details, "cached_tokens", 0) or 0)
+    return {
+        "input": getattr(u, "prompt_tokens", 0),
+        "output": getattr(u, "completion_tokens", 0),
+        "total": getattr(u, "total_tokens", 0),
+        "cache_hit": hit,
+        "cache_miss": getattr(u, "prompt_cache_miss_tokens",
+                              getattr(u, "prompt_tokens", 0) - hit),
+    }
 
-    返回 (full_response_list, reasoning_parts_list)。
-    所有终端输出通过 Rich Live 管理，不直接写 stdout。
+
+def stream_output(console: Console, response, reasoning_file, output_file, *, rich_render: bool = True):
+    """流式遍历 API 响应，输出结束后可选 Rich 渲染。
+
+    返回 (full_response_list, reasoning_parts_list, usage_dict)。
     """
     reasoning_parts = []
     full_response = []
     reasoning_active = False
     content_started = False
+    usage = {}
 
-    with Live(console=console, auto_refresh=False, vertical_overflow="visible", transient=True) as live:
-        for chunk in response:
-            try:
-                if chunk.choices[0].delta.reasoning_content is not None:
-                    rc = chunk.choices[0].delta.reasoning_content
-                    reasoning_parts.append(rc)
-                    reasoning_active = True
-                    dots = "." * (len(reasoning_parts) % 6 + 1)
-                    live.update(Text(f"Thinking{dots}", style="dim"))
-                    live.refresh()
-                    with open(reasoning_file, "a") as f:
-                        f.write(rc)
-            except AttributeError:
-                pass
+    for chunk in response:
+        try:
+            if chunk.choices[0].delta.reasoning_content is not None:
+                rc = chunk.choices[0].delta.reasoning_content
+                reasoning_parts.append(rc)
+                reasoning_active = True
+                dots = "." * (len(reasoning_parts) % 6 + 1)
+                sys.stdout.write(f"\r\x1b[90mThinking{dots}\x1b[0m")
+                sys.stdout.flush()
+                with open(reasoning_file, "a") as f:
+                    f.write(rc)
+        except AttributeError:
+            pass
 
-            if chunk.choices[0].delta.content is not None:
-                content = chunk.choices[0].delta.content
-                full_response.append(content)
+        if chunk.choices[0].delta.content is not None:
+            content = chunk.choices[0].delta.content
+            full_response.append(content)
+            if reasoning_active:
+                sys.stdout.write("\r\x1b[2K\r")
                 reasoning_active = False
+            if not content_started:
                 content_started = True
-                rendered = render_math("".join(full_response))
-                live.update(Markdown(rendered))
-                live.refresh()
-                with open(output_file, "a") as f:
-                    f.write(content)
+            sys.stdout.write(content)
+            sys.stdout.flush()
+            with open(output_file, "a") as f:
+                f.write(content)
+
+        if hasattr(chunk, "usage") and chunk.usage:
+            usage = _parse_usage(chunk.usage)
 
     if content_started:
-        console.print(Markdown(render_math("".join(full_response))))
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        if rich_render:
+            rendered = render_math("".join(full_response))
+            console.print(Markdown(rendered))
 
-    return full_response, reasoning_parts
+    return full_response, reasoning_parts, usage

@@ -1,6 +1,6 @@
-<h1 align="center">AI TransMate</h1>
+<h1 align="center">TransMate</h1>
 <p align="center">
-  <b>终端 LLM 翻译工具 — 自动源语言检测、语境分析</b>
+  <b>终端 LLM 翻译工具 - 自动源语言检测、语境分析</b>
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/Python 3.9+-%231f4361?logo=python&logoColor=%23ffe264&labelColor=%233570a0">

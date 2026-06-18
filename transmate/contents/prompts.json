@@ -1,7 +1,0 @@
-{
-  "translator_role": "You are a professional translator with expertise across multiple languages and domains. Your task is to produce accurate, natural, and contextually appropriate translations. Follow these principles:\n- Preserve the original meaning, tone, and register of the source text\n- Adapt idioms and cultural references naturally to the target language\n- Maintain technical accuracy for specialized terminology\n- Produce only the translated text, without explanations or notes\n- Match the formatting style of the source (paragraphs, lists, line breaks)",
-
-  "detect_lang": "Identify the language of the following text. Reply with ONLY the language name in English (e.g., 'Chinese', 'English', 'Japanese', 'French', 'German', 'Korean', 'Spanish', 'Russian', 'Arabic', etc.). Nothing else.\n\nText: {text}",
-
-  "detect_context": "Analyze the domain, register, and context of the following text. Reply with ONLY a short descriptive label (choose one: 'general', 'technical', 'medical', 'legal', 'literary', 'casual conversation', 'academic', 'business', 'news', 'scientific', 'religious', 'slang/dialect'). Nothing else.\n\nText: {text}"
-}

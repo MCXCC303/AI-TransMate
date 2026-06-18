@@ -2,10 +2,13 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
+import openai
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import NestedCompleter
 from prompt_toolkit.formatted_text import HTML
@@ -15,11 +18,27 @@ from .ansi_chars import TerminalColor
 from .generate_hash import by_timestamp
 from .config import (
     DEFAULT_CONFIG, PROVIDER_URLS, LANG_MAP,
-    load_config, save_config, get_config_dir,
-    _collect_model,
+    load_config, save_config, get_config_dir, get_config_path,
+    _collect_model, estimate_cost, validate_config,
 )
 from .history_viewer import show_history
-from .translator import translate
+from .translator import TranslationSession
+
+# ── 语言名大小写不敏感查找 ──
+_LANG_LOWER: dict[str, str] = {k.lower(): k for k in LANG_MAP}
+
+
+def _find_language(name: str) -> str | None:
+    """大小写不敏感匹配语言名，支持英文名和中文名。"""
+    key = name.strip().lower()
+    if key in _LANG_LOWER:
+        return _LANG_LOWER[key]
+    for k, v in LANG_MAP.items():
+        if v == name.strip():
+            return k
+        if v.lower() == key:
+            return k
+    return None
 
 
 class TransMateCLI:
@@ -65,27 +84,35 @@ class TransMateCLI:
     COMPLETER = NestedCompleter.from_nested_dict({
         "lang": None, "source": None, "model": None, "fast": None,
         "prov": None, "show": None, "switch": None, "bye": None,
-        "help": None, "?": None,
+        "help": None, "?": None, "clear": None, "usage": None,
         "config": {"edit": None, "show": None},
         "history": {"clear": None},
     })
 
     def __init__(self):
-        self.config = load_config()
+        self.config, self._is_new = load_config()
         self.session_id = ""
         self.detected_lang = ""
         self.detected_context = ""
+        self.usage = {}
+        self.session: TranslationSession | None = None
 
     def run(self):
+        if self._is_new:
+            time.sleep(0.5)
+            print(f"{TerminalColor.GREEN.value}Welcome to TransMate, Initializing...{TerminalColor.RESET.value}")
+            sys.stdout.flush()
+            time.sleep(0.5)
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.flush()
+
         self._connect()
         self.session_id = by_timestamp()
-        vi = self.config.get("vi_mode", True)
         history_path = get_config_dir() / ".input_history"
 
         session = PromptSession(
             history=FileHistory(str(history_path)),
             bottom_toolbar=self._render_toolbar,
-            vi_mode=vi,
             completer=self.COMPLETER,
             complete_while_typing=False,
             prompt_continuation=lambda w, ln, wc: "... " if ln > 0 else "",
@@ -99,7 +126,7 @@ class TransMateCLI:
             try:
                 if not multiline:
                     text = session.prompt(
-                        HTML("<ansiyellow><b>>>></b></ansiyellow> "), multiline=False
+                        HTML("<ansiyellow><b>>>> </b></ansiyellow>"), multiline=False
                     )
                     if "\n" in text:
                         self._handle_message("\n".join(text.split("\n")))
@@ -129,6 +156,7 @@ class TransMateCLI:
                         buffer.append(text)
 
             except EOFError:
+                self._show_exit_usage()
                 print("Exiting...")
                 break
             except KeyboardInterrupt:
@@ -143,17 +171,74 @@ class TransMateCLI:
         if config is None:
             config = self.config
         if not save_config(config):
-            self.config = load_config()
+            self.config, _ = load_config()
             print(f"{TerminalColor.YELLOW.value}Config reverted to last valid version.{TerminalColor.RESET.value}")
 
     def _handle_message(self, text: str):
         sys.stdout.flush()
-        self.detected_lang, self.detected_context = translate(
-            text, self.config, self.session_id
+        sys.stdout.write(f"{TerminalColor.GREEN.value}==> {TerminalColor.RESET.value}\n")
+        sys.stdout.flush()
+
+        if self.session is None:
+            self.session = TranslationSession(self.config, self.session_id)
+
+        self.detected_lang, self.detected_context, self.usage = self.session.translate(
+            text, self.config
         )
 
+    def _maybe_warn_session(self):
+        """若会话活跃则提示更改将在新会话中生效。"""
+        if self.session and self.session.is_active:
+            print(f"{TerminalColor.YELLOW.value}更改的选项将在新会话中生效{TerminalColor.RESET.value}")
+
+    def _show_exit_usage(self):
+        if not self.config.get("show_usage_on_exit", False):
+            return
+        if self.session:
+            self.session._cancel_context_timer()
+        u = self.usage
+        if not u or u.get("total", 0) == 0:
+            return
+        model = self.config.get("main_model", "-")
+        cost = estimate_cost(model, u)
+        print(f"\n{TerminalColor.GRAY.value}── Session Usage ──────────────{TerminalColor.RESET.value}")
+        print(f"  Model:    {model}")
+        print(f"  Input:    {u.get('input', 0):,}")
+        print(f"  Output:   {u.get('output', 0):,}")
+        if u.get("cache_hit", 0) > 0:
+            print(f"  Cache:    hit {u['cache_hit']:,} / miss {u.get('cache_miss', 0):,}")
+        print(f"  Total:    {u.get('total', 0):,}")
+        print(f"  Cost:     {cost}")
+
+    def _cmd_clear(self, args):
+        if self.session is None or not self.session.is_active:
+            print(f"{TerminalColor.GRAY.value}没有活跃的会话。{TerminalColor.RESET.value}")
+            return
+        self.session = None
+        self.detected_lang = ""
+        self.detected_context = ""
+        self.usage = {}
+        self.session_id = by_timestamp()
+        print(f"{TerminalColor.GREEN.value}会话已重置。{TerminalColor.RESET.value}")
+
+    def _cmd_usage(self, args):
+        u = self.usage
+        if not u or u.get("total", 0) == 0:
+            print(f"{TerminalColor.GRAY.value}No usage data available yet.{TerminalColor.RESET.value}")
+            return
+        model = self.config.get("main_model", "-")
+        cost = estimate_cost(model, u)
+        print(f"Model:    {model}")
+        print(f"Input:    {u.get('input', 0):,}")
+        print(f"Output:   {u.get('output', 0):,}")
+        if u.get("cache_hit", 0) > 0:
+            print(f"Cache:    hit {u['cache_hit']:,} / miss {u.get('cache_miss', 0):,}")
+        if u.get("reasoning", 0) > 0:
+            print(f"Reasoning:{u['reasoning']:,}")
+        print(f"Total:    {u.get('total', 0):,}")
+        print(f"Cost:     {cost}")
+
     def _connect(self):
-        import openai
         provider = self.config.get("provider", "DEEPSEEK")
         model = self.config.get("main_model", "deepseek-chat")
 
@@ -173,35 +258,64 @@ class TransMateCLI:
                 )
                 print(f"Target: {TerminalColor.BLUE.value}{self.config.get('target_lang', 'Chinese')}{TerminalColor.RESET.value}. "
                       f"{TerminalColor.GRAY.value}(/? for help){TerminalColor.RESET.value}\n")
+                time.sleep(0.5)
                 break
             except KeyboardInterrupt:
                 print("Exiting...")
                 sys.exit(0)
             except Exception:
                 print(f"Failed to connect to {provider}. Retrying...")
-                import time
                 time.sleep(1)
 
     def _render_toolbar(self):
         sid_short = self.session_id[-12:] if self.session_id else "---"
-        target = self.config.get("target_lang", "Chinese")
+        active = self.session and self.session.is_active
 
-        if self.config.get("source_lang_specified"):
-            src_display = self.config.get("source_lang", "-")
+        # 会话活跃时用快照值 + 绿色标记，否则用 config 当前值
+        if active:
+            target = self.session.target_lang
+            model = self.session.main_model
+            if self.session.source_lang_specified:
+                src_display = self.session.source_lang or "-"
+            else:
+                dl = self.session.detected_lang or "?"
+                if dl == "Unknown":
+                    dl = "?"
+                src_display = f"auto({dl})"
+            ctx = self.session.detected_context or "-"
         else:
-            dl = self.detected_lang or "?"
-            src_display = f"auto({dl})"
+            target = self.config.get("target_lang", "Chinese")
+            model = self.config.get("main_model", "-")
+            if self.config.get("source_lang_specified"):
+                src_display = self.config.get("source_lang", "-")
+            else:
+                dl = self.detected_lang or "?"
+                if dl == "Unknown":
+                    dl = "?"
+                src_display = f"auto({dl})"
+            ctx = self.detected_context or "-"
 
-        ctx = self.detected_context or "-"
-        model = self.config.get("main_model", "-")
+        lock_color = "ansigreen" if active else ""
 
-        return HTML(
-            f"<b> Session:</b> {sid_short} "
-            f"<b>| Target:</b> {target} "
-            f"<b>| Source:</b> {src_display} "
-            f"<b>| Context:</b> {ctx} "
-            f"<b>| Model:</b> {model} "
-        )
+        # Context 颜色：活跃但语境过期时用橙色，否则用绿色
+        ctx_color = "ansiyellow" if (active and self.session.context_stale) else lock_color
+
+        parts = [
+            f"<b> Session:</b> {sid_short}",
+            f"<b>| Target:</b> <{lock_color}>{target}</{lock_color}>" if active else f"<b>| Target:</b> {target}",
+            f"<b>| Source:</b> <{lock_color}>{src_display}</{lock_color}>" if active else f"<b>| Source:</b> {src_display}",
+            f"<b>| Context:</b> <{ctx_color}>{ctx}</{ctx_color}>" if active else f"<b>| Context:</b> {ctx}",
+            f"<b>| Model:</b> {model}",
+        ]
+
+        if active:
+            parts.append(f"<b>| Turns:</b> {self.session.turn_count}")
+
+        u = self.usage
+        if self.config.get("show_tokens", True) and u and u.get("output", 0) > 0:
+            parts.append(f"<b>| Output:</b> {u['output']}")
+
+        return HTML(" ".join(parts))
 
     # ── 命令路由 ──
 
@@ -216,7 +330,8 @@ class TransMateCLI:
             "show": self._cmd_show, "model": self._cmd_model, "fast": self._cmd_fast,
             "prov": self._cmd_prov, "lang": self._cmd_lang, "source": self._cmd_source,
             "switch": self._cmd_switch, "history": self._cmd_history,
-            "config": self._cmd_config,
+            "config": self._cmd_config, "clear": self._cmd_clear,
+            "usage": self._cmd_usage,
         }
 
         if args.strip() == "?":
@@ -252,7 +367,6 @@ class TransMateCLI:
                     print(f.read())
 
         elif sub == "edit":
-            from .config import get_config_path, validate_config
             config_path = get_config_path()
             with open(config_path, "r", encoding="utf-8") as src:
                 original = src.read()
@@ -305,13 +419,17 @@ class TransMateCLI:
                 print(f"Unknown config key: '{sub}'.")
                 print(f"Valid keys: {', '.join(DEFAULT_CONFIG.keys())}")
                 return
-            if sub in ("source_lang_specified", "vi_mode", "context_optimization"):
+            if not val:
+                print(f"{sub} = {TerminalColor.GREEN.value}{self.config.get(sub)}{TerminalColor.RESET.value}")
+                return
+            if isinstance(DEFAULT_CONFIG.get(sub), bool):
                 if val.lower() in ("true", "yes", "1"):
                     self.config[sub] = True
                 elif val.lower() in ("false", "no", "0"):
                     self.config[sub] = False
                 else:
-                    self.config[sub] = bool(val)
+                    print(f"'{val}' is not a valid boolean. Use true/false.")
+                    return
             elif sub == "source_lang" and val.lower() == "null":
                 self.config[sub] = None
             else:
@@ -333,6 +451,8 @@ class TransMateCLI:
             "  /prov          Change API provider\n"
             "  /show          Show current configuration\n"
             "  /switch        Swap source and target languages\n"
+            "  /clear         Reset translation session\n"
+            "  /usage         Show token usage and cost estimate\n"
             "  /history       View translation history\n"
             "  /history clear Clear translation history\n"
             "  /bye           Exit\n"
@@ -350,7 +470,6 @@ class TransMateCLI:
         if not self.config.get('source_lang_specified'):
             src = f"auto (detected: {self.detected_lang or 'N/A'})"
         print(f"Source Lang:   {src}")
-        print(f"VI Mode:       {self.config.get('vi_mode')}")
         print(f"Cache Optim:   {self.config.get('context_optimization')}")
         print(f"Config Dir:    {get_config_dir()}")
 
@@ -361,7 +480,6 @@ class TransMateCLI:
         self._change_model("fast_model")
 
     def _change_model(self, key):
-        import openai
         client = openai.OpenAI(
             api_key=self.config.get("api_key"),
             base_url=self.config.get("base_url"),
@@ -389,6 +507,12 @@ class TransMateCLI:
         self._save_config()
         print(f"{key} set to {TerminalColor.GREEN.value}{self.config[key]}{TerminalColor.RESET.value}.")
 
+        if self.session and self.session.is_active:
+            if key == "main_model":
+                self.session.main_model = self.config[key]
+            elif key == "fast_model":
+                self.session.fast_model = self.config[key]
+
     def _cmd_prov(self, args):
         print("Available providers:")
         providers = list(PROVIDER_URLS.keys())
@@ -405,7 +529,6 @@ class TransMateCLI:
                 return
         self.config["base_url"] = PROVIDER_URLS[self.config["provider"]]
 
-        import openai
         import getpass
         self.config["api_key"] = getpass.getpass(f"API key for {self.config['provider']}: ")
         client = openai.OpenAI(api_key=self.config["api_key"], base_url=self.config["base_url"])
@@ -421,6 +544,7 @@ class TransMateCLI:
         self._save_config()
         print(f"Provider: {TerminalColor.GREEN.value}{self.config['provider']}{TerminalColor.RESET.value}, "
               f"Model: {TerminalColor.GREEN.value}{self.config['main_model']}{TerminalColor.RESET.value}.")
+        self._maybe_warn_session()
 
     def _cmd_lang(self, args):
         print("Available languages:")
@@ -432,18 +556,15 @@ class TransMateCLI:
         try:
             self.config["target_lang"] = langs[int(choice)]
         except (ValueError, IndexError):
-            if choice in langs:
-                self.config["target_lang"] = choice
-            elif choice in LANG_MAP.values():
-                for k, v in LANG_MAP.items():
-                    if v == choice:
-                        self.config["target_lang"] = k
-                        break
+            match = _find_language(choice)
+            if match:
+                self.config["target_lang"] = match
             else:
                 print("Invalid language.")
                 return
         self._save_config()
         print(f"Target language: {TerminalColor.BLUE.value}{self.config['target_lang']}{TerminalColor.RESET.value}.")
+        self._maybe_warn_session()
 
     def _cmd_source(self, args):
         if args.strip().lower() == "auto":
@@ -451,6 +572,7 @@ class TransMateCLI:
             self.config["source_lang"] = None
             self._save_config()
             print(f"Source language: {TerminalColor.GREEN.value}auto (detection enabled){TerminalColor.RESET.value}.")
+            self._maybe_warn_session()
             return
 
         print("Available languages:")
@@ -458,7 +580,7 @@ class TransMateCLI:
         for i, lang in enumerate(langs):
             cn = LANG_MAP.get(lang, "")
             print(f"  {i:2d}) {lang} ({cn})")
-        print(f"  Or type 'auto' for automatic detection.")
+        print(f"...Or type 'auto' for automatic detection.")
         choice = input(f"{TerminalColor.GREEN_BOLD.value}Source language: {TerminalColor.RESET.value}").strip()
         if choice.lower() == "auto":
             self.config["source_lang_specified"] = False
@@ -467,8 +589,9 @@ class TransMateCLI:
             try:
                 self.config["source_lang"] = langs[int(choice)]
             except (ValueError, IndexError):
-                if choice in langs:
-                    self.config["source_lang"] = choice
+                match = _find_language(choice)
+                if match:
+                    self.config["source_lang"] = match
                 else:
                     print("Invalid language.")
                     return
@@ -476,6 +599,7 @@ class TransMateCLI:
         self._save_config()
         src = self.config.get("source_lang", "auto")
         print(f"Source language: {TerminalColor.BLUE.value}{src}{TerminalColor.RESET.value}.")
+        self._maybe_warn_session()
 
     def _cmd_switch(self, args):
         if not self.config.get("source_lang_specified") or not self.config.get("source_lang"):
@@ -487,9 +611,9 @@ class TransMateCLI:
         self._save_config()
         print(f"Swapped: {TerminalColor.BLUE.value}{self.config['source_lang']}{TerminalColor.RESET.value} "
               f"→ {TerminalColor.RED.value}{self.config['target_lang']}{TerminalColor.RESET.value}.")
+        self._maybe_warn_session()
 
     def _cmd_history(self, args):
-        import shutil
         from .config import get_history_dir
         if args.strip().lower() == "clear":
             hd = get_history_dir()

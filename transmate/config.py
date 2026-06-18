@@ -15,6 +15,15 @@ def _load_contents(filename):
         return json.load(f)
 
 
+def _load_prompts():
+    prompts_dir = _CONTENTS_DIR / "prompts"
+    prompts = {}
+    for md_file in sorted(prompts_dir.glob("*.md")):
+        with open(md_file, "r", encoding="utf-8") as f:
+            prompts[md_file.stem] = f.read().strip()
+    return prompts
+
+
 PROVIDER_URLS = _load_contents("providers.json")
 
 DEFAULT_CONFIG = {
@@ -26,11 +35,35 @@ DEFAULT_CONFIG = {
     "target_lang": "Chinese",
     "source_lang_specified": False,
     "source_lang": None,
-    "vi_mode": True,
     "context_optimization": True,
+    "context_review": True,
+    "show_usage_on_exit": False,
+    "show_tokens": True,
+    "rich_render": False,
 }
 
 LANG_MAP = _load_contents("languages.json")
+PRICING = _load_contents("pricing.json")
+
+
+def estimate_cost(model: str, usage: dict) -> str:
+    """根据 usage 和模型定价估算费用，返回格式化字符串。"""
+    price = PRICING.get(model)
+    if not price:
+        return "N/A"
+    inp = usage.get("input", 0)
+    out = usage.get("output", 0)
+    cache_hit = usage.get("cache_hit", 0)
+    cache_miss = usage.get("cache_miss", inp)
+    reasoning = usage.get("reasoning", 0)
+    cost = (
+        inp * price.get("input", 0)
+        + out * price.get("output", 0)
+        + cache_hit * price.get("cache_read", 0)
+        + (cache_miss - cache_hit) * price.get("cache_write", 0)
+        + reasoning * price.get("reasoning", price.get("output", 0))
+    ) / 1_000_000
+    return f"${cost:.6f}"
 
 
 def get_config_dir():
@@ -47,20 +80,18 @@ def get_history_dir():
 
 
 def load_config():
+    """返回 (config, is_new) — is_new 表示是否首次创建。"""
     config_dir = get_config_dir()
     config_path = get_config_path()
 
     if not config_path.exists():
-        return _init_config(config_dir, config_path)
+        return _init_config(config_dir, config_path), True
 
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    for key, value in DEFAULT_CONFIG.items():
-        if key not in config:
-            config[key] = value
-
-    return config
+    config = DEFAULT_CONFIG | config
+    return config, False
 
 
 def _init_config(config_dir, config_path):
@@ -72,11 +103,9 @@ def _init_config(config_dir, config_path):
 
     if env:
         config.update(env)
-        filled = list(env.keys())
-        # 仅对无默认值的必需 key 进行交互补全
         missing = [k for k in ("api_key", "provider", "base_url", "main_model") if k not in env]
         print(f"{TerminalColor.GREEN.value}Read from environment:{TerminalColor.RESET.value} "
-              f"{', '.join(filled)}")
+              f"{', '.join(env)}")
         if missing:
             print(f"{TerminalColor.YELLOW.value}Missing: {', '.join(missing)} — completing...{TerminalColor.RESET.value}\n")
             _interactive_setup_partial(config, missing)
@@ -103,7 +132,7 @@ def _read_env_config():
     if base_url:
         result["base_url"] = base_url
         for name, url in PROVIDER_URLS.items():
-            if url == base_url or base_url.startswith(url):
+            if base_url.startswith(url):
                 result["provider"] = name
                 break
         if "provider" not in result:
@@ -209,7 +238,7 @@ def _collect_model(config):
             print(f"  {i:2d}) {m}")
         if len(models) > 20:
             print(f"  ... and {len(models) - 20} more")
-        print(f"\n  Or type any model name directly.")
+        print(f"\n...Or type any model name directly.")
     except Exception:
         print("  (Could not fetch model list. Type model name directly.)")
 
