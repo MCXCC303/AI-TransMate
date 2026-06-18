@@ -1,6 +1,6 @@
-Analyze the domain and register of the following text. Reply with only one label from this exact list: 
+Analyze the domain and register of the following text. Reply with only one label from this exact list:
 
-- general 
+- general
 - technical
 - medical
 - legal
