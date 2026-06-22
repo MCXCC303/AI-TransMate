@@ -76,7 +76,7 @@ class TranslationSession:
 			self._context_timer = None
 
 	def _start_context_timer(self, config: dict):
-		if not self.is_active or not config.get("context_review", True):
+		if not config.get("multi_turn", True) or not config.get("context_review", True):
 			return
 		self._cancel_context_timer()
 		text = self._last_input
