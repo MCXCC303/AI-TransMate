@@ -18,6 +18,7 @@ from .ansi_chars import TerminalColor
 from .config import (
 	DEFAULT_CONFIG, I18n, PROVIDER_URLS, LANG_MAP,
 	load_config, save_config, get_config_dir, get_config_path,
+	get_pager, get_editor,
 	_collect_model, estimate_cost, validate_config,
 )
 from .generate_hash import by_timestamp
@@ -53,6 +54,7 @@ class TransMateCLI:
 		self.detected_lang = ""
 		self.detected_context = ""
 		self.usage = {}
+		self._session_usage: dict = {}
 		self.session: TranslationSession | None = None
 
 	def run(self):
@@ -66,6 +68,7 @@ class TransMateCLI:
 
 		self._connect()
 		self.session_id = by_timestamp()
+		self._session_usage = {}
 		history_path = get_config_dir() / ".input_history"
 
 		session = PromptSession(
@@ -147,6 +150,10 @@ class TransMateCLI:
 			text, self.config
 		)
 
+		if self.usage and self.usage.get("total", 0) > 0:
+			for k in ("input", "output", "total", "cache_hit", "cache_miss", "reasoning"):
+				self._session_usage[k] = self._session_usage.get(k, 0) + self.usage.get(k, 0)
+
 		if not self.config.get("multi_turn", True):
 			self.session = None
 
@@ -206,25 +213,41 @@ class TransMateCLI:
 		self.detected_lang = ""
 		self.detected_context = ""
 		self.usage = {}
-		self.session_id = by_timestamp()
 		print(f"{TerminalColor.GREEN.value}{self._t('session_reset')}{TerminalColor.RESET.value}")
 
 	def _cmd_usage(self, args):
-		u = self.usage
-		if not u or u.get("total", 0) == 0:
-			print(f"{TerminalColor.GRAY.value}{self._t('no_usage')}{TerminalColor.RESET.value}")
-			return
 		model = self.config.get("main_model", "-")
-		cost = estimate_cost(model, u)
-		print(f"Model:    {model}")
-		print(f"Input:    {u.get('input', 0):,}")
-		print(f"Output:   {u.get('output', 0):,}")
-		if u.get("cache_hit", 0) > 0:
-			print(f"Cache:    hit {u['cache_hit']:,} / miss {u.get('cache_miss', 0):,}")
-		if u.get("reasoning", 0) > 0:
-			print(f"Reasoning:{u['reasoning']:,}")
-		print(f"Total:    {u.get('total', 0):,}")
-		print(f"Cost:     {cost}")
+		last = self.usage
+		total = self._session_usage
+
+		if total and total.get("total", 0) > 0:
+			cost = estimate_cost(model, total)
+			print(f"{TerminalColor.YELLOW.value}{self._t('session_usage')}{TerminalColor.RESET.value}")
+			print(f"  Model:     {model}")
+			print(f"  Input:     {total.get('input', 0):,}")
+			print(f"  Output:    {total.get('output', 0):,}")
+			if total.get("cache_hit", 0) > 0:
+				print(f"  Cache:     hit {total['cache_hit']:,} / miss {total.get('cache_miss', 0):,}")
+			if total.get("reasoning", 0) > 0:
+				print(f"  Reasoning: {total['reasoning']:,}")
+			print(f"  Total:     {total.get('total', 0):,}")
+			print(f"  Cost:      {cost}")
+
+		if last and last.get("total", 0) > 0:
+			if total and total.get("total", 0) > 0:
+				print()  # 分隔行
+			last_cost = estimate_cost(model, last)
+			print(f"{TerminalColor.GRAY.value}{self._t('last_translation')}:{TerminalColor.RESET.value}")
+			print(f"  Input:     {last.get('input', 0):,}")
+			print(f"  Output:    {last.get('output', 0):,}")
+			if last.get("cache_hit", 0) > 0:
+				print(f"  Cache:     hit {last['cache_hit']:,} / miss {last.get('cache_miss', 0):,}")
+			print(f"  Total:     {last.get('total', 0):,}")
+			print(f"  Cost:      {last_cost}")
+			return
+
+		if not total and not last:
+			print(f"{TerminalColor.GRAY.value}{self._t('no_usage')}{TerminalColor.RESET.value}")
 
 	def _connect(self):
 		provider = self.config.get("provider", "DEEPSEEK")
@@ -355,7 +378,7 @@ class TransMateCLI:
 		if sub == "show":
 			config_path = str(get_config_dir() / "config.json")
 			try:
-				subprocess.call(["less", config_path])
+				subprocess.call([get_pager(), config_path])
 			except FileNotFoundError:
 				with open(config_path, "r") as f:
 					print(f.read())
@@ -370,8 +393,7 @@ class TransMateCLI:
 			try:
 				with os.fdopen(tmp_fd, "w") as dst:
 					dst.write(original)
-				os.chmod(tmp_name, 0o600)
-				editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
+					editor = get_editor()
 				subprocess.call([editor, tmp_name])
 
 				with open(tmp_name, "r", encoding="utf-8") as src:

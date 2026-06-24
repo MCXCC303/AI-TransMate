@@ -93,5 +93,6 @@
   "config_usage": "用法:\n  /config show           通过 less 查看配置\n  /config edit           在 $EDITOR 中编辑配置\n  /config <key> <value>  直接设置配置项",
   "history_title": "翻译历史",
   "history_read_error": "无法读取历史文件。",
-  "history_nav": "↑↓ 导航 | Enter 选择"
+  "history_nav": "↑↓ 导航 | Enter 选择",
+  "last_translation": "── 上次翻译 ────────────"
 }

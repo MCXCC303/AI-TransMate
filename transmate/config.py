@@ -1,6 +1,7 @@
 import json
 import locale
 import os
+import platform
 import sys
 from pathlib import Path
 
@@ -108,14 +109,33 @@ def estimate_cost(model: str, usage: dict) -> str:
 	return f"${cost:.6f}"
 
 def get_config_dir():
-	xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-	return Path(xdg) / "transmate"
+	if platform.system() == "Windows":
+		base = os.environ.get("APPDATA", os.path.expanduser("~"))
+	elif platform.system() == "Darwin":
+		base = os.path.expanduser("~/Library/Application Support")
+	else:
+		base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+	return Path(base) / "transmate"
+
 
 def get_config_path():
 	return get_config_dir() / "config.json"
 
+
 def get_history_dir():
 	return get_config_dir() / "history"
+
+
+def get_pager():
+	if platform.system() == "Windows":
+		return os.environ.get("PAGER", "more")
+	return os.environ.get("PAGER", "less")
+
+
+def get_editor():
+	if platform.system() == "Windows":
+		return os.environ.get("EDITOR") or os.environ.get("VISUAL") or "notepad"
+	return os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
 
 def load_config():
 	"""返回 (config, is_new) — is_new 表示是否首次创建。"""

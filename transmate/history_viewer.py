@@ -4,7 +4,7 @@ from pathlib import Path
 
 from prompt_toolkit.shortcuts import radiolist_dialog
 
-from .config import get_history_dir, I18n
+from .config import get_history_dir, get_pager, I18n
 
 def show_history(target_lang: str = "Chinese"):
 	history_dir = get_history_dir()
@@ -79,9 +79,8 @@ def _view_full_result(filepath, target_lang):
 	tmp = Path(tempfile.gettempdir()) / f"transmate_view_{filepath.stem}.md"
 	tmp.write_text(content, encoding="utf-8")
 
-	pager = "less"
 	try:
-		subprocess.call([pager, "-R", str(tmp)])
+		subprocess.call([get_pager(), "-R", str(tmp)])
 	except FileNotFoundError:
 		print(content[-2000:])
 

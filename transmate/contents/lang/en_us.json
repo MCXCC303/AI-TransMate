@@ -93,5 +93,6 @@
   "config_usage": "Usage:\n  /config show           View config via less\n  /config edit           Edit config in $EDITOR\n  /config <key> <value>  Set a config option directly",
   "history_title": "Translation History",
   "history_read_error": "Failed to read history file.",
-  "history_nav": "↑↓ navigate | Enter select"
+  "history_nav": "↑↓ navigate | Enter select",
+  "last_translation": "── Last Translation ────────────"
 }
