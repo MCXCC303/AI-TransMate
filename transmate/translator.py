@@ -17,10 +17,11 @@ from .output import stream_output
 from .prompt_builder import build_system_message
 from .providers import get_provider
 
-_context_cache: dict[str, str] = {}
+_context_cache: dict[str, tuple[str, str]] = {}
 _MAX_CACHE_SIZE = 256
 
-def _cached_detect_context(text: str, client, provider, model: str) -> str:
+def _cached_detect_context(text: str, client, provider, model: str) -> tuple[str, str]:
+	"""缓存检测结果。返回 (context, term_type)。"""
 	cache_key = hashlib.md5(text.encode("utf-8")).hexdigest()
 	if cache_key in _context_cache:
 		return _context_cache[cache_key]
@@ -50,6 +51,7 @@ class TranslationSession:
 		self._turn_count = 0
 		self._detected_lang: str = ""
 		self._detected_context: str = ""
+		self._detected_term_type: str = "sentence"
 		self._last_input: str = ""
 		self._context_timer: threading.Timer | None = None
 		self.context_stale: bool = False
@@ -93,7 +95,7 @@ class TranslationSession:
 			try:
 				client = openai.OpenAI(api_key=api_key, base_url=base_url)
 				p = get_provider(provider_name)
-				new_ctx = detect_context(text, client, p, fast_model)
+				new_ctx, _ = detect_context(text, client, p, fast_model)
 				if new_ctx != original_ctx:
 					session.context_stale = True
 					os.kill(os.getpid(), signal.SIGWINCH)
@@ -134,7 +136,7 @@ class TranslationSession:
 				f"{TerminalColor.GRAY.value}{i18n('analyzing_context')}{TerminalColor.RESET.value}\r"
 			)
 			sys.stdout.flush()
-			self._detected_context = _cached_detect_context(text, client, provider, self.fast_model)
+			self._detected_context, self._detected_term_type = _cached_detect_context(text, client, provider, self.fast_model)
 			sys.stdout.write(f"{TerminalColor.CLEAR_LINE.value}\r")
 			sys.stdout.flush()
 
@@ -143,11 +145,25 @@ class TranslationSession:
 				target_lang=self.target_lang,
 				source_lang=source_for_prompt,
 				context=self._detected_context,
+				term_type=self._detected_term_type,
 			)
 			self._messages = [{"role": "system", "content": system_msg}]
 
 		if self._turn_count > 0:
-			text = f"Translate the following text to {self.target_lang}. Output only the translation, nothing else.\n\n{text}"
+			try:
+				_, self._detected_term_type = detect_context(text, client, provider, self.fast_model)
+			except Exception:
+				self._detected_term_type = "sentence"
+
+			prefix = f"Translate the following text to {self.target_lang}."
+			if self._detected_term_type == "abbreviation":
+				prefix += " This is an abbreviation — provide its full expanded name."
+			elif self._detected_term_type == "technical_term":
+				prefix += " This is a technical term — provide the standard full name."
+			elif self._detected_term_type == "phrase":
+				prefix += " This is a phrase — provide the complete equivalent expression."
+			prefix += " Output only the translation, nothing else.\n\n"
+			text = prefix + text
 		self._messages.append({"role": "user", "content": text})
 		self._turn_count += 1
 

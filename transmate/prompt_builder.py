@@ -8,11 +8,17 @@ TRANSLATION_ROLE = _PROMPTS["translator_role"]
 _INSTRUCTION_TEMPLATE = "Translate the following text to {target_lang}."
 _DOMAIN_TEMPLATE = "Domain: {context}."
 _LANGUAGE_TEMPLATE = "Source language: {source_lang}."
+_TERM_TYPE_TEMPLATES = {
+	"abbreviation": "Input type: abbreviation or acronym. Expand it to its full name in {target_lang}.",
+	"technical_term": "Input type: technical term. Provide the standard full term in {target_lang}.",
+	"phrase": "Input type: phrase or compound expression. Provide the complete equivalent in {target_lang}.",
+}
 
 def build_system_message(
 		target_lang: str,
 		source_lang: str = "",
 		context: str = "",
+		term_type: str = "",
 ) -> str:
 	"""构建首条 system 消息，会话后续轮次复用此消息作为缓存前缀锚点。"""
 	parts = [TRANSLATION_ROLE, _INSTRUCTION_TEMPLATE.format(target_lang=target_lang)]
@@ -20,4 +26,6 @@ def build_system_message(
 		parts.append(_DOMAIN_TEMPLATE.format(context=context))
 	if source_lang:
 		parts.append(_LANGUAGE_TEMPLATE.format(source_lang=source_lang))
+	if term_type and term_type != "sentence" and term_type in _TERM_TYPE_TEMPLATES:
+		parts.append(_TERM_TYPE_TEMPLATES[term_type].format(target_lang=target_lang))
 	return "\n\n".join(parts)

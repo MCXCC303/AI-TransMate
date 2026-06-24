@@ -86,6 +86,27 @@ def _normalize_context(raw: str) -> str:
 
 	return _CONTEXT_ALIASES.get(cleaned, "general")
 
+_TERM_TYPE_ALIASES = {
+	"sentence": "sentence", "sent": "sentence", "text": "sentence",
+	"phrase": "phrase", "expression": "phrase", "collocation": "phrase",
+	"abbreviation": "abbreviation", "abbr": "abbreviation", "acronym": "abbreviation",
+	"initialism": "abbreviation",
+	"technical_term": "technical_term", "technical term": "technical_term",
+	"tech_term": "technical_term", "scientific_term": "technical_term",
+	"chemical": "technical_term",
+}
+
+def _normalize_term_type(raw: str) -> str:
+	"""Normalize term type detection output to a valid label."""
+	if not raw or not raw.strip():
+		return "sentence"
+
+	cleaned = re.sub(r"[^\w\s/-]", "", raw).strip().lower()
+	if not cleaned:
+		return "sentence"
+
+	return _TERM_TYPE_ALIASES.get(cleaned, "sentence")
+
 def _detect_call(client, provider: BaseProvider, model: str, prompt: str) -> str:
 	"""通过 provider 封装检测调用，自动处理各提供商的格式差异。"""
 	kwargs = provider.get_detect_kwargs(prompt, model)
@@ -108,10 +129,16 @@ def detect_source_language(text: str, client, provider: BaseProvider, model: str
 	except Exception:
 		return "Unknown"
 
-def detect_context(text: str, client, provider: BaseProvider, model: str) -> str:
+def detect_context(text: str, client, provider: BaseProvider, model: str) -> tuple[str, str]:
+	"""检测文本领域和输入类型。返回 (context, term_type)。"""
 	prompt = _PROMPTS["detect_context"].format(text=text)
 	try:
 		result = _detect_call(client, provider, model, prompt)
-		return _normalize_context(result)
+		lines = [ln.strip() for ln in result.strip().split("\n") if ln.strip()]
+		if len(lines) >= 2:
+			return _normalize_context(lines[0]), _normalize_term_type(lines[1])
+		if lines:
+			return _normalize_context(lines[0]), "sentence"
+		return "general", "sentence"
 	except Exception:
-		return "general"
+		return "general", "sentence"
